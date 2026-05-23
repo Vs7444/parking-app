@@ -11,7 +11,7 @@ type AuthContextValue = {
   session: Session;
   loading: boolean;
   isGuest: boolean;
-  signup: (payload: { name: string; email: string; password: string; role?: string }) => Promise<any>;
+  signup: (payload: any) => Promise<any>;
   login: (payload: { email: string; password: string }) => Promise<any>;
   guestLogin: () => void;
   logout: () => Promise<void>;

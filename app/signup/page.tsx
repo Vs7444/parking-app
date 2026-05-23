@@ -11,6 +11,18 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // additional registration fields
+  const [employeeNumber, setEmployeeNumber] = useState("");
+  const [vehicleMake, setVehicleMake] = useState("");
+  const [vehicleModel, setVehicleModel] = useState("");
+  const [vehiclePlate, setVehiclePlate] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
+  const [parkingRequired, setParkingRequired] = useState(false);
+  const [openForCarpooling, setOpenForCarpooling] = useState(false);
+  const [preferredCarpoolSpot, setPreferredCarpoolSpot] = useState("");
+  const [monthlyLearningPoints, setMonthlyLearningPoints] = useState<number>(0);
+
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -25,7 +37,20 @@ export default function SignupPage() {
     setError(null);
     setSubmitting(true);
 
-    const result = await signup({ name, email, password });
+    const payload = {
+      name,
+      email,
+      password,
+      employeeNumber,
+      vehicle: { make: vehicleMake, model: vehicleModel, plate: vehiclePlate },
+      contactNumber,
+      parkingRequired,
+      openForCarpooling,
+      preferredCarpoolSpot: preferredCarpoolSpot || null,
+      monthlyLearningPoints: Number(monthlyLearningPoints) || 0,
+    };
+
+    const result = await signup(payload);
     setSubmitting(false);
 
     if (!result.ok) {
@@ -61,6 +86,12 @@ export default function SignupPage() {
               required
             />
           </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-800">Employee #</span>
+            <input className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" value={employeeNumber} onChange={(e) => setEmployeeNumber(e.target.value)} placeholder="E12345" />
+          </label>
+
           <label className="block">
             <span className="text-sm font-medium text-slate-800">Email</span>
             <input
@@ -72,6 +103,47 @@ export default function SignupPage() {
               required
             />
           </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-800">Contact number</span>
+            <input className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="+1 555 987 6543" />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-800">Vehicle (make)</span>
+            <input className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" value={vehicleMake} onChange={(e) => setVehicleMake(e.target.value)} placeholder="Toyota" />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-800">Vehicle (model)</span>
+            <input className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)} placeholder="Camry" />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-800">Vehicle plate</span>
+            <input className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" value={vehiclePlate} onChange={(e) => setVehiclePlate(e.target.value)} placeholder="ABC-1234" />
+          </label>
+
+          <label className="flex items-center gap-3">
+            <input type="checkbox" checked={parkingRequired} onChange={(e) => setParkingRequired(e.target.checked)} className="h-4 w-4" />
+            <span className="text-sm">I need a parking space</span>
+          </label>
+
+          <label className="flex items-center gap-3">
+            <input type="checkbox" checked={openForCarpooling} onChange={(e) => setOpenForCarpooling(e.target.checked)} className="h-4 w-4" />
+            <span className="text-sm">Open for carpooling</span>
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-800">Preferred carpooling spot</span>
+            <input className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" value={preferredCarpoolSpot} onChange={(e) => setPreferredCarpoolSpot(e.target.value)} placeholder="Near entrance" />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-800">Monthly learning points</span>
+            <input type="number" min={0} value={monthlyLearningPoints} onChange={(e) => setMonthlyLearningPoints(Number(e.target.value))} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" />
+          </label>
+
           <label className="block">
             <span className="text-sm font-medium text-slate-800">Password</span>
             <input
@@ -83,6 +155,7 @@ export default function SignupPage() {
               required
             />
           </label>
+
           {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button

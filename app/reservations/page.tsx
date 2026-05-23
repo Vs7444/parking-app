@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { reservations as reservationsApi, slots as slotsApi, waitlist as waitlistApi } from "../../services/mockApi";
+import { admin, reservations as reservationsApi, slots as slotsApi, waitlist as waitlistApi } from "../../services/mockApi";
 import { useAuth } from "../../lib/auth";
 import type { Slot, Reservation, WaitlistEntry } from "../../services/store";
 
@@ -18,11 +18,14 @@ function formatSlotType(type: string) {
 export default function ReservationsPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [availableSlots, setAvailableSlots] = useState<Slot[]>([]);
   const [selectedSlotId, setSelectedSlotId] = useState<string>("");
   const [startsAt, setStartsAt] = useState("2026-06-01T08:00");
   const [endsAt, setEndsAt] = useState("2026-06-01T12:00");
+  const [users, setUsers] = useState<any[]>([]);
+  const prevReservationIdsRef = useRef<string[]>([]);
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [message, setMessage] = useState<string | null>(null);
@@ -41,6 +44,17 @@ export default function ReservationsPage() {
     }
   }, [startsAt, endsAt, user?.id]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      loadData();
+      if (startsAt && endsAt) {
+        refreshAvailability();
+      }
+    }, 10000);
+
+    return () => window.clearInterval(timer);
+  }, [user?.id, startsAt, endsAt]);
+
   const loadData = async () => {
     setLoading(true);
     const slotsRes = await slotsApi.list();
@@ -51,6 +65,12 @@ export default function ReservationsPage() {
     if (user?.id) {
       const reservationsRes = await reservationsApi.list({ userId: user.id });
       if (reservationsRes.ok) {
+        const currentIds = reservationsRes.data.map((r) => r.id).sort();
+        const previousIds = prevReservationIdsRef.current.slice().sort();
+        if (previousIds.length && currentIds.join(",") !== previousIds.join(",")) {
+          setMessage(null);
+        }
+        prevReservationIdsRef.current = currentIds;
         setReservations(reservationsRes.data);
       }
 
@@ -61,6 +81,16 @@ export default function ReservationsPage() {
     } else {
       setReservations([]);
       setWaitlist([]);
+    }
+
+    const usersRes = await admin.listUsers();
+    if (usersRes.ok) {
+      setUsers(usersRes.data || []);
+    }
+
+    const allReservationsRes = await admin.listAllReservations();
+    if (allReservationsRes.ok) {
+      setAllReservations(allReservationsRes.data);
     }
 
     setLoading(false);
@@ -109,6 +139,9 @@ export default function ReservationsPage() {
 
     setMessage("Reservation created successfully.");
     await loadData();
+    if (startsAt && endsAt) {
+      await refreshAvailability();
+    }
   };
 
   const handleJoinWaitlist = async () => {
@@ -137,6 +170,74 @@ export default function ReservationsPage() {
 
     setMessage("Added to the waitlist.");
     await loadData();
+    if (startsAt && endsAt) {
+      await refreshAvailability();
+    }
+  };
+
+  const now = new Date();
+  const openAfter11 = now.getHours() >= 11;
+  const isCurrentReservation = (reservation: Reservation) => {
+    if (reservation.status === "cancelled" || reservation.status === "completed") return false;
+    const start = new Date(reservation.startsAt).getTime();
+    const end = new Date(reservation.endsAt).getTime();
+    return now.getTime() >= start && now.getTime() <= end;
+  };
+
+  const currentActiveReservations = reservations.filter((reservation) => isCurrentReservation(reservation));
+  const activeSlotsCount = slots.filter((slot) => slot.status === "active").length;
+  const utilizedSlotCount = slots.filter((slot) => {
+    return allReservations.some((reservation: Reservation) => reservation.slotId === slot.id && isCurrentReservation(reservation));
+  }).length;
+  const availableSlotCount = Math.max(activeSlotsCount - utilizedSlotCount, 0);
+  const unauthorizedCount = allReservations.filter((reservation) => reservation.unauthorized && (reservation.status === "confirmed" || reservation.status === "parked")).length;
+
+  const handleCheckIn = async (reservationId: string) => {
+    setError(null);
+    setMessage(null);
+    setLoading(true);
+    const res = await reservationsApi.checkin({ reservationId });
+    setLoading(false);
+    if (!res.ok) {
+      setError((res as any).error || "Unable to mark parked.");
+      return;
+    }
+    setMessage("Parking status updated to parked.");
+    await loadData();
+  };
+
+  const handleCheckOut = async (reservationId: string) => {
+    setError(null);
+    setMessage(null);
+    setLoading(true);
+    const res = await reservationsApi.checkout({ reservationId });
+    setLoading(false);
+    if (!res.ok) {
+      setError((res as any).error || "Unable to mark departure.");
+      return;
+    }
+    setMessage("Checked out successfully.");
+    await loadData();
+    if (startsAt && endsAt) {
+      await refreshAvailability();
+    }
+  };
+
+  const handleCancelReservation = async (reservationId: string) => {
+    setError(null);
+    setMessage(null);
+    setLoading(true);
+    const res = await reservationsApi.cancel({ reservationId });
+    setLoading(false);
+    if (!res.ok) {
+      setError((res as any).error || "Unable to cancel reservation.");
+      return;
+    }
+    setMessage("Reservation canceled and slot released.");
+    await loadData();
+    if (startsAt && endsAt) {
+      await refreshAvailability();
+    }
   };
 
   return (
@@ -150,6 +251,23 @@ export default function ReservationsPage() {
           <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
             User: <strong>{authLoading ? "Loading..." : user ? user.name : "Guest"}</strong>
           </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-sm uppercase tracking-wide text-slate-500">Active parking slots</p>
+            <p className="mt-3 text-3xl font-semibold text-slate-900">{activeSlotsCount}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-sm uppercase tracking-wide text-slate-500">Current utilization</p>
+            <p className="mt-3 text-3xl font-semibold text-slate-900">{utilizedSlotCount}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-sm uppercase tracking-wide text-slate-500">Parking status</p>
+            <p className="mt-3 text-3xl font-semibold text-slate-900">{openAfter11 ? "Open to all" : "Limited access until 11 AM"}</p>
+          </div>
+        </div>
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
+          {openAfter11 ? "All parking spaces are now open to all associates." : "Designated and priority slots are enforced until 11 AM."}
         </div>
         {!authLoading && !user ? (
           <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
@@ -249,6 +367,36 @@ export default function ReservationsPage() {
                     <p className="font-semibold">Reservation {reservation.id}</p>
                     <p className="text-sm text-slate-600">Slot {reservation.slotId} • {formatDateTime(reservation.startsAt)} – {formatDateTime(reservation.endsAt)}</p>
                     <p className="mt-2 text-xs uppercase tracking-wide text-slate-500">{reservation.status}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {reservation.status === "confirmed" && isCurrentReservation(reservation) ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCheckIn(reservation.id)}
+                          className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+                        >
+                          Mark parked
+                        </button>
+                      ) : null}
+                      {reservation.status === "parked" ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCheckOut(reservation.id)}
+                          className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
+                        >
+                          Vacate slot
+                        </button>
+                      ) : null}
+                      {(reservation.status === "confirmed" || reservation.status === "parked") ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCancelReservation(reservation.id)}
+                          className="rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+                        >
+                          Cancel reservation
+                        </button>
+                      ) : null}
+                    </div>
+                    {reservation.unauthorized ? <p className="mt-3 text-sm text-rose-700">This reservation is flagged as unauthorized parking.</p> : null}
                   </div>
                 ))}
               </div>
@@ -260,19 +408,34 @@ export default function ReservationsPage() {
 
         <div className="space-y-6">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">Slot inventory</h2>
+            <h2 className="text-xl font-semibold">Occupied slot inventory</h2>
+            
             <div className="mt-4 grid gap-3">
-              {slots.map((slot) => (
-                <div key={slot.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-lg font-semibold">{slot.label}</p>
-                      <p className="text-sm text-slate-600">Zone {slot.zone} • {slot.type}</p>
+              {slots
+                .filter((slot) => !availableSlots.some((available) => available.id === slot.id))
+                .map((slot) => {
+                  const occupant = allReservations.find((r) => r.slotId === slot.id && (r.status === "confirmed" || r.status === "parked") && isCurrentReservation(r));
+                  const occupantUser = occupant ? users.find((u) => u.id === occupant.userId) : null;
+                  return (
+                    <div key={slot.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-lg font-semibold">{slot.label} {occupant ? <span className="text-sm font-medium text-slate-500">• Occupied</span> : <span className="text-sm font-medium text-slate-500">• Unavailable</span>}</p>
+                          <p className="text-sm text-slate-600">Zone {slot.zone} • {slot.type}</p>
+                          {occupant ? (
+                            <p className="mt-2 text-sm text-slate-700">
+                              {occupantUser ? `${occupantUser.name} — ${occupantUser.email}` : `User: ${occupant.userId}`}
+                              {occupant.unauthorized ? <span className="text-rose-700 font-semibold ml-2"> (Unauthorized)</span> : null}
+                            </p>
+                          ) : (
+                            <p className="mt-2 text-sm text-slate-500">Not available for the selected request window.</p>
+                          )}
+                        </div>
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">{slot.status}</span>
+                      </div>
                     </div>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">{slot.status}</span>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
             </div>
           </div>
 

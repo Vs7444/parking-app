@@ -1,41 +1,11 @@
 {
+  "meta": { "employeeCount": 1500, "parkingSpaces": 150, "company": "Mi Lugar" },
   "users": [
-    {
-      "id": "u_admin",
-      "name": "Admin User",
-      "email": "admin@example.com",
-      "password": "obf_admin_pwd",
-      "role": "admin",
-      "disabled": false,
-      "createdAt": "2026-05-21T00:00:00.000Z"
-    },
-    {
-      "id": "u_employee",
-      "name": "Employee",
-      "email": "employee@example.com",
-      "password": "obf_emp_pwd",
-      "role": "employee",
-      "disabled": false,
-      "createdAt": "2026-05-21T00:00:00.000Z"
-    },
-    {
-      "id": "u_user",
-      "name": "Regular User",
-      "email": "user@example.com",
-      "password": "obf_user_pwd",
-      "role": "user",
-      "disabled": false,
-      "createdAt": "2026-05-21T00:00:00.000Z"
-    }
+    { "id": "u_admin", "name": "Admin User", "email": "admin@example.com", "password": "obf_admin_pwd", "role": "admin", "disabled": false, "createdAt": "2026-05-21T00:00:00.000Z" },
+    { "id": "u_employee", "name": "Employee", "email": "employee@example.com", "password": "obf_emp_pwd", "role": "employee", "disabled": false, "createdAt": "2026-05-21T00:00:00.000Z" },
+    { "id": "u_user", "name": "Regular User", "email": "user@example.com", "password": "obf_user_pwd", "role": "user", "disabled": false, "createdAt": "2026-05-21T00:00:00.000Z" }
   ],
-  "slots": [
-    { "id": "slot_a1", "label": "A1", "zone": "A", "type": "regular", "status": "active" },
-    { "id": "slot_a2", "label": "A2", "zone": "A", "type": "compact", "status": "active" },
-    { "id": "slot_b1", "label": "B1", "zone": "B", "type": "regular", "status": "active" },
-    { "id": "slot_b2", "label": "B2", "zone": "B", "type": "ev", "status": "active" },
-    { "id": "slot_c1", "label": "C1", "zone": "C", "type": "regular", "status": "active" },
-    { "id": "slot_c2", "label": "C2", "zone": "C", "type": "compact", "status": "active" }
-  ],
+  "slots": [],
   "reservations": [],
   "waitlist": []
-}
+} 
